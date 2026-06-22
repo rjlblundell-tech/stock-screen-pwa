@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Screen" />
+  <meta name="theme-color" content="#0D0F0E" />
+  <title>Stock Screen</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+
+  <!-- ── CONFIGURATION ──────────────────────────────────────────────────────
+       Replace these two values before deploying.
+       SUPABASE_URL  : your project URL, e.g. https://abcdef.supabase.co
+       SUPABASE_KEY  : your publishable key (sb_publishable_... or the legacy anon key)
+                       This key is intentionally public — security is handled by RLS.
+  ──────────────────────────────────────────────────────────────────────── -->
+  <script>
+const CONFIG = {
+  SUPABASE_URL: 'https://ycqocdiavztphhtnruhz.supabase.co',
+  SUPABASE_KEY: 'sb_publishable_4L6vTxDwvA_s-bCV_mY00g_hYaClkoP',
+  TABLE:        'screen_results',
+  ROWS:         20,
+    };
+  </script>
+
+  <style>
+    /* ── TOKENS ────────────────────────────────────────────────────── */
+    :root {
+      --bg:          #0D0F0E;
+      --surface:     #131615;
+      --border:      #1E2120;
+      --text:        #E8E6E1;
+      --muted:       #5A5E5C;
+      --gold:        #C9A84C;
+      --gold-dim:    #8C7234;
+      --green:       #4CAF82;
+      --amber:       #C9A84C;
+      --red:         #C94C4C;
+      --mono:        'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      --sans:        'Inter', system-ui, -apple-system, sans-serif;
+      --radius:      6px;
+      --safe-top:    env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* ── RESET ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── LAYOUT ─────────────────────────────────────────────────────── */
+    #app {
+      min-height: 100%;
+      padding-top: calc(var(--safe-top) + 16px);
+      padding-bottom: calc(var(--safe-bottom) + 24px);
+      padding-left: 16px;
+      padding-right: 16px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      gap: 12px;
+    }
+    h1 {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+    #run-date {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    #refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    #refresh-btn:hover, #refresh-btn:focus-visible {
+      border-color: var(--gold-dim);
+      color: var(--gold);
+      outline: none;
+    }
+    #refresh-btn.loading { opacity: 0.4; pointer-events: none; }
+
+    /* ── COLUMN LABELS ───────────────────────────────────────────────── */
+    .col-labels {
+      display: grid;
+      grid-template-columns: 28px 72px 1fr 64px 64px 80px;
+      gap: 0 12px;
+      padding: 8px 14px 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+    .col-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .col-label.right { text-align: right; }
+
+    /* ── CARDS ──────────────────────────────────────────────────────── */
+    #cards { display: flex; flex-direction: column; gap: 3px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .card:hover { border-color: var(--gold-dim); }
+    .card.open  { border-color: var(--gold-dim); }
+
+    /* ── CARD MAIN ROW ──────────────────────────────────────────────── */
+    .card-main {
+      display: grid;
+      grid-template-columns: 28px 72px 1fr 64px 64px 80px;
+      gap: 0 12px;
+      align-items: center;
+      padding: 11px 14px;
+    }
+
+    .rank {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .ticker {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.04em;
+    }
+
+    /* Score bar column */
+    .score-col { display: flex; flex-direction: column; gap: 4px; }
+    .score-bar-wrap {
+      position: relative;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      border-radius: 2px;
+      width: 0;                   /* animated in JS */
+      transition: width 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    .score-bar-fill.quant { background: var(--gold); }
+    .score-bar-fill.ai    { background: var(--green); }
+    .score-labels {
+      display: flex;
+      justify-content: space-between;
+    }
+    .score-lbl {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .score-val {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    /* Numeric score columns */
+    .num-col {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: right;
+    }
+    .num-col.quant { color: var(--gold); }
+    .num-col.ai    { color: var(--green); }
+    .num-col.na    { color: var(--muted); }
+
+    /* Conviction badge */
+    .conviction {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 3px 8px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .conviction.high   { color: var(--green); background: rgba(76,175,130,0.12); }
+    .conviction.medium { color: var(--amber); background: rgba(201,168,76,0.12); }
+    .conviction.low    { color: var(--red);   background: rgba(201,76,76,0.12); }
+    .conviction.na     { color: var(--muted); background: transparent; }
+
+    /* ── EXPANDED DETAIL ────────────────────────────────────────────── */
+    .card-detail {
+      display: none;
+      padding: 0 14px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .card.open .card-detail { display: block; }
+
+    .rationale {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+      padding: 10px 0 8px;
+    }
+
+    .drivers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .driver-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--gold);
+      border: 1px solid var(--gold-dim);
+      border-radius: 3px;
+      padding: 2px 7px;
+    }
+
+    .signals-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 6px;
+    }
+    .sig-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 9px;
+    }
+    .sig-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .sig-value {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .sig-item.pass .sig-value { color: var(--green); }
+    .sig-item.fail .sig-value { color: var(--red); }
+
+    /* ── STATES ─────────────────────────────────────────────────────── */
+    #status {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      padding: 48px 0;
+      text-align: center;
+    }
+    #error-msg {
+      display: none;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--red);
+      padding: 12px 14px;
+      border: 1px solid rgba(201,76,76,0.3);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+    }
+
+    /* ── FOOTER ─────────────────────────────────────────────────────── */
+    footer {
+      margin-top: 24px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── REDUCED MOTION ─────────────────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      .score-bar-fill { transition: none; }
+      .card           { transition: none; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <h1>/ screen</h1>
+    <span id="run-date">—</span>
+    <button id="refresh-btn">↻ refresh</button>
+  </header>
+
+  <div id="error-msg"></div>
+
+  <div class="col-labels" id="col-labels" style="display:none">
+    <span class="col-label">#</span>
+    <span class="col-label">ticker</span>
+    <span class="col-label">score</span>
+    <span class="col-label right">quant</span>
+    <span class="col-label right">ai</span>
+    <span class="col-label" style="text-align:center">conviction</span>
+  </div>
+
+  <div id="status">loading…</div>
+  <div id="cards"></div>
+
+  <footer id="footer" style="display:none">
+    not investment advice · personal use only
+  </footer>
+
+</div>
+
+<script>
+// ── HELPERS ────────────────────────────────────────────────────────────────
+
+function fmt(v, decimals = 1) {
+  if (v == null || v === '') return '—';
+  const n = parseFloat(v);
+  return isNaN(n) ? '—' : n.toFixed(decimals);
+}
+
+function fmtScore(v) {
+  if (v == null) return null;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : n;
+}
+
+function convictionClass(c) {
+  if (!c) return 'na';
+  return ['high','medium','low'].includes(c.toLowerCase()) ? c.toLowerCase() : 'na';
+}
+
+function sigPass(signals, key) {
+  // Return true/false/null for known boolean signal keys
+  const boolKeys = ['above_sma50','above_sma200','rsi_constructive','volume_expansion','upper_52w_range'];
+  if (boolKeys.includes(key)) return signals[key] === true;
+  return null;
+}
+
+const SIG_LABELS = {
+  last_close:      'Price',
+  sma50:           'SMA 50',
+  sma200:          'SMA 200',
+  rsi14:           'RSI 14',
+  vol_vs_avg20:    'Vol/Avg20',
+  pct_52w_range:   '52w range %',
+  above_sma50:     '> SMA 50',
+  above_sma200:    '> SMA 200',
+  rsi_constructive:'RSI 45–70',
+  volume_expansion:'Vol ×1.2',
+  upper_52w_range: '52w ≥ 60%',
+};
+
+const NUMERIC_SIG_KEYS = ['last_close','sma50','sma200','rsi14','vol_vs_avg20','pct_52w_range'];
+const BOOL_SIG_KEYS    = ['above_sma200','above_sma50','rsi_constructive','volume_expansion','upper_52w_range'];
+
+// ── RENDER ─────────────────────────────────────────────────────────────────
+
+function renderSignals(signals) {
+  if (!signals || typeof signals !== 'object') return '';
+  const items = [];
+
+  for (const k of NUMERIC_SIG_KEYS) {
+    if (!(k in signals)) continue;
+    const decimals = k === 'rsi14' ? 1 : k === 'vol_vs_avg20' ? 2 : k === 'pct_52w_range' ? 1 : 2;
+    items.push(`
+      <div class="sig-item">
+        <div class="sig-label">${SIG_LABELS[k] || k}</div>
+        <div class="sig-value">${fmt(signals[k], decimals)}</div>
+      </div>`);
+  }
+
+  for (const k of BOOL_SIG_KEYS) {
+    if (!(k in signals)) continue;
+    const pass = signals[k] === true;
+    items.push(`
+      <div class="sig-item ${pass ? 'pass' : 'fail'}">
+        <div class="sig-label">${SIG_LABELS[k] || k}</div>
+        <div class="sig-value">${pass ? '✓' : '✗'}</div>
+      </div>`);
+  }
+
+  return items.length ? `<div class="signals-grid">${items.join('')}</div>` : '';
+}
+
+function renderCard(row, index) {
+  const qs  = fmtScore(row.quant_score);
+  const ais = fmtScore(row.ai_score);
+  const cv  = convictionClass(row.conviction);
+  const cvLabel = row.conviction ? row.conviction.toLowerCase() : '—';
+
+  const drivers = Array.isArray(row.key_drivers) && row.key_drivers.length
+    ? `<div class="drivers">${row.key_drivers.map(d => `<span class="driver-tag">${d}</span>`).join('')}</div>`
+    : '';
+
+  const rationale = row.rationale
+    ? `<p class="rationale">${row.rationale}</p>`
+    : '';
+
+  const sigHtml = renderSignals(row.signals);
+
+  return `
+  <div class="card" id="card-${index}" role="button" tabindex="0"
+       aria-expanded="false" onclick="toggleCard(${index})"
+       onkeydown="if(event.key==='Enter'||event.key===' ')toggleCard(${index})">
+    <div class="card-main">
+      <span class="rank">${row.rank != null ? row.rank : index + 1}</span>
+      <span class="ticker">${row.ticker || '—'}</span>
+      <div class="score-col">
+        <div class="score-bar-wrap">
+          <div class="score-bar-fill quant" id="qbar-${index}" style="width:0%"></div>
+        </div>
+        <div class="score-bar-wrap">
+          <div class="score-bar-fill ai" id="abar-${index}" style="width:0%"></div>
+        </div>
+        <div class="score-labels">
+          <span class="score-lbl">Q</span>
+          <span class="score-lbl">AI</span>
+        </div>
+      </div>
+      <span class="num-col quant ${qs == null ? 'na' : ''}">${qs != null ? qs : '—'}</span>
+      <span class="num-col ai    ${ais == null ? 'na' : ''}">${ais != null ? ais : '—'}</span>
+      <span class="conviction ${cv}">${cvLabel}</span>
+    </div>
+    <div class="card-detail">
+      ${rationale}
+      ${drivers}
+      ${sigHtml}
+    </div>
+  </div>`;
+}
+
+function animateBars(rows) {
+  // Trigger bar fills after a short delay so the browser has painted the cards.
+  setTimeout(() => {
+    rows.forEach((row, i) => {
+      const qs = fmtScore(row.quant_score);
+      const ais = fmtScore(row.ai_score);
+      const qEl = document.getElementById(`qbar-${i}`);
+      const aEl = document.getElementById(`abar-${i}`);
+      if (qEl && qs != null) qEl.style.width = `${Math.min(qs, 100)}%`;
+      if (aEl && ais != null) aEl.style.width = `${Math.min(ais, 100)}%`;
+    });
+  }, 60);
+}
+
+function toggleCard(index) {
+  const card = document.getElementById(`card-${index}`);
+  if (!card) return;
+  const isOpen = card.classList.toggle('open');
+  card.setAttribute('aria-expanded', isOpen);
+}
+
+// ── DATA FETCH ─────────────────────────────────────────────────────────────
+
+async function fetchLatestRun() {
+  // Get the most recent run_date first, then fetch all rows for that date.
+  const base = CONFIG.SUPABASE_URL.replace(/\/$/, '');
+  const headers = {
+    'apikey': CONFIG.SUPABASE_KEY,
+    'Authorization': `Bearer ${CONFIG.SUPABASE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  // Step 1: find the latest run_date
+  const dateRes = await fetch(
+    `${base}/rest/v1/${CONFIG.TABLE}?select=run_date&order=run_date.desc&limit=1`,
+    { headers }
+  );
+  if (!dateRes.ok) throw new Error(`Supabase ${dateRes.status}: ${await dateRes.text()}`);
+  const dateData = await dateRes.json();
+  if (!dateData.length) return [];
+  const latestDate = dateData[0].run_date;
+
+  // Step 2: fetch all rows for that date, ordered by rank
+  const rowsRes = await fetch(
+    `${base}/rest/v1/${CONFIG.TABLE}?run_date=eq.${latestDate}&order=rank.asc,quant_score.desc&limit=${CONFIG.ROWS}`,
+    { headers }
+  );
+  if (!rowsRes.ok) throw new Error(`Supabase ${rowsRes.status}: ${await rowsRes.text()}`);
+  return await rowsRes.json();
+}
+
+// ── MAIN ───────────────────────────────────────────────────────────────────
+
+async function load() {
+  const status   = document.getElementById('status');
+  const cards    = document.getElementById('cards');
+  const runDate  = document.getElementById('run-date');
+  const colHdr   = document.getElementById('col-labels');
+  const errorMsg = document.getElementById('error-msg');
+  const footer   = document.getElementById('footer');
+  const btn      = document.getElementById('refresh-btn');
+
+  status.textContent = 'loading…';
+  status.style.display = 'block';
+  cards.innerHTML = '';
+  errorMsg.style.display = 'none';
+  colHdr.style.display = 'none';
+  footer.style.display = 'none';
+  btn.classList.add('loading');
+
+  try {
+    const rows = await fetchLatestRun();
+
+    if (!rows.length) {
+      status.textContent = 'No data yet — run the pipeline first.';
+      return;
+    }
+
+    runDate.textContent = rows[0].run_date || '';
+    status.style.display = 'none';
+    colHdr.style.display = 'grid';
+    footer.style.display = 'block';
+
+    cards.innerHTML = rows.map((r, i) => renderCard(r, i)).join('');
+    animateBars(rows);
+
+  } catch (err) {
+    status.style.display = 'none';
+    errorMsg.textContent = `Error: ${err.message}`;
+    errorMsg.style.display = 'block';
+    console.error(err);
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+
+document.getElementById('refresh-btn').addEventListener('click', load);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+load();
+</script>
+</body>
+</html>
