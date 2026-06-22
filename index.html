@@ -515,7 +515,7 @@ async function fetchLatestRun() {
 
   // Step 2: fetch all rows for that date, ordered by rank
   const rowsRes = await fetch(
-    `${base}/rest/v1/${CONFIG.TABLE}?run_date=eq.${latestDate}&order=rank.asc,quant_score.desc&limit=${CONFIG.ROWS}`,
+    `${base}/rest/v1/${CONFIG.TABLE}?run_date=eq.${latestDate}&order=quant_score.desc&limit=${CONFIG.ROWS}`,
     { headers }
   );
   if (!rowsRes.ok) throw new Error(`Supabase ${rowsRes.status}: ${await rowsRes.text()}`);
